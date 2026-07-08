@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Intel Scraper</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117; 
+            --card-bg: #161b22;
+            --accent: #0dcaf0; 
+            --text-main: #f0f6fc;
+            --text-muted: #8b949e;
+            --border-color: #30363d;
+            --input-bg: #090d13;
+            --success: #238636;
+        }
+        body { background-color: var(--bg-dark); color: var(--text-main); font-family: -apple-system, sans-serif; margin: 0; padding: 40px; }
+        
+        .header { border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end;}
+        .header-titles h1 { margin: 0; color: #fff; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+        .header-titles p { color: var(--text-muted); margin: 5px 0 0 0; font-size: 13px; }
+
+        /* API VAULT */
+        .vault-btn { background: #21262d; border: 1px solid var(--border-color); color: var(--text-main); padding: 8px 16px; border-radius: 4px; font-size: 12px; cursor: pointer; text-transform: uppercase; font-weight: bold; letter-spacing: 1px; transition: 0.2s;}
+        .vault-btn:hover { background: #30363d; border-color: #8b949e; }
+        .vault-panel { display: none; background: #090d13; border: 1px solid var(--accent); padding: 20px; border-radius: 8px; margin-bottom: 30px; }
+        .vault-panel.active { display: block; }
+        .vault-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        .search-bar { display: flex; gap: 15px; background: var(--card-bg); padding: 25px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 30px; }
+        .input-group { flex: 1; }
+        label { display: block; font-size: 11px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; font-weight: bold; letter-spacing: 1px;}
+        input { width: 100%; background: var(--input-bg); border: 1px solid var(--border-color); color: #fff; padding: 12px; border-radius: 4px; font-size: 16px; box-sizing: border-box; text-transform: uppercase; font-family: monospace;}
+        input:focus { outline: none; border-color: var(--accent); }
+        button.btn-primary { background: var(--accent); color: #000; border: none; padding: 0 30px; border-radius: 4px; font-weight: 900; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s; }
+        button.btn-primary:hover { background: #31d2f2; transform: translateY(-2px); box-shadow: 0 4px 15px rgba(13, 202, 240, 0.3);}
+        
+        #loader { display: none; color: var(--accent); font-weight: bold; margin-bottom: 20px; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+        .results-grid { display: none; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        
+        .data-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; position: relative; overflow: hidden; transition: 0.3s;}
+        .data-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent); transition: 0.3s;}
+        
+        /* LOCKED / UNLOCKED STATES */
+        .gov-card::before { background: #E50914; }
+        .gov-card .card-title { color: #E50914; }
+        .gov-card.unlocked { border-color: var(--success); }
+        .gov-card.unlocked::before { background: var(--success); }
+        .gov-card.unlocked .card-title { color: var(--success); }
+        
+        .card-title { font-size: 12px; text-transform: uppercase; color: var(--accent); font-weight: bold; margin-bottom: 15px; letter-spacing: 1px; display: flex; align-items: center; justify-content: space-between;}
+        
+        .data-row { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding: 8px 0; align-items: center; min-height: 24px;}
+        .data-row:last-child { border-bottom: none; }
+        .data-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+        .data-value { font-size: 13px; font-weight: bold; color: #fff; text-align: right; max-width: 60%;}
+
+        .map-container { grid-column: 1 / -1; height: 400px; border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden; background: #000; }
+        .map-container iframe { width: 100%; height: 100%; border: none; }
+        
+        .api-badge { font-size: 9px; background: #21262d; padding: 3px 6px; border-radius: 4px; color: #c9d1d9;}
+        .gov-card .api-badge { background: #440000; color: #ff8888; }
+        .gov-card.unlocked .api-badge { background: rgba(35, 134, 54, 0.2); color: var(--success); }
+
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-titles">
+            <h1>Property Intel Scraper</h1>
+            <p>Public Data Aggregation for Architectural Feasibility Studies</p>
+        </div>
+        <button class="vault-btn" onclick="toggleVault()">⚙️ API Vault</button>
+    </div>
+
+    <div class="vault-panel" id="apiVault">
+        <h3 style="margin-top:0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #fff;">Local Secure API Vault</h3>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 20px;">Keys entered here are saved locally to your browser memory. They are never sent to a third-party server.</p>
+        <div class="vault-grid">
+            <div>
+                <label>UK Gov EPC Base64 Token</label>
+                <input type="password" id="keyEpc" placeholder="Paste EPC Token..." onchange="saveKeys()">
+            </div>
+            <div>
+                <label>Ordnance Survey Project Key</label>
+                <input type="password" id="keyOs" value="JSaLTN9GqI0WNNZMnL4diQl6BtLlyb6Q9HihiAIuJD5Ns0cY5SV2tKTeJ8kefb61" onchange="saveKeys()">
+            </div>
+        </div>
+    </div>
+
+    <div class="search-bar">
+        <div class="input-group">
+            <label>House Name / Number</label>
+            <input type="text" id="houseNum" placeholder="e.g. 14">
+        </div>
+        <div class="input-group">
+            <label>UK Postcode</label>
+            <input type="text" id="postcode" placeholder="e.g. S70 0PN">
+        </div>
+        <button class="btn-primary" onclick="runIntelScrape()">Extract Data</button>
+    </div>
+
+    <div id="loader">Establishing secure connection to public databases...</div>
+
+    <div class="results-grid" id="resultsGrid">
+        
+        <div class="data-card">
+            <div class="card-title">Geospatial & Administrative <span class="api-badge">Postcodes.io</span></div>
+            <div class="data-row"><span class="data-label">Local Authority</span><span class="data-value" id="val-council">--</span></div>
+            <div class="data-row"><span class="data-label">Ward</span><span class="data-value" id="val-ward">--</span></div>
+            <div class="data-row"><span class="data-label">Region</span><span class="data-value" id="val-region">--</span></div>
+            <div class="data-row"><span class="data-label">Coordinates</span><span class="data-value" id="val-coords">--</span></div>
+        </div>
+
+        <div class="data-card">
+            <div class="card-title">Topography & Wind Exposure <span class="api-badge">Open-Meteo</span></div>
+            <div class="data-row"><span class="data-label">Elevation (ASL)</span><span class="data-value" id="val-elevation">--</span></div>
+            <div class="data-row"><span class="data-label">Current Wind Speed</span><span class="data-value" id="val-wind">--</span></div>
+            <div class="data-row"><span class="data-label">Structural Exposure</span><span class="data-value" id="val-exposure">--</span></div>
+            <div class="data-row"><span class="data-label">Snow Load Index</span><span class="data-value" id="val-snow">--</span></div>
+        </div>
+
+        <div class="data-card">
+            <div class="card-title">Solar & Lighting Analysis <span class="api-badge">SunCalc</span></div>
+            <div class="data-row"><span class="data-label">First Light (Dawn)</span><span class="data-value" id="val-dawn">--</span></div>
+            <div class="data-row"><span class="data-label">Sunset</span><span class="data-value" id="val-sunset">--</span></div>
+            <div class="data-row"><span class="data-label">Total Daylight</span><span class="data-value" id="val-daylight">--</span></div>
+            <div class="data-row"><span class="data-label">Solar Impact</span><span class="data-value" style="color: #f59e0b;">Critical for Glass Roofs</span></div>
+        </div>
+
+        <div class="data-card gov-card" id="govCard">
+            <div class="card-title">Existing Dwelling Data <span class="api-badge" id="epcBadge">EPC API (Locked)</span></div>
+            <div class="data-row"><span class="data-label">Total Floor Area</span><span class="data-value" id="val-epc-area" style="color:#8b949e;">Requires Auth Key</span></div>
+            <div class="data-row"><span class="data-label">Property Type</span><span class="data-value" id="val-epc-type" style="color:#8b949e;">Requires Auth Key</span></div>
+            <div class="data-row"><span class="data-label">Wall Construction</span><span class="data-value" id="val-epc-walls" style="color:#8b949e;">Requires Auth Key</span></div>
+            <div class="data-row"><span class="data-label">Roof System</span><span class="data-value" id="val-epc-roof" style="color:#8b949e;">Requires Auth Key</span></div>
+        </div>
+
+        <div class="map-container" id="mapContainer">
+            </div>
+
+    </div>
+
+    <script>
+        // --- VAULT LOGIC ---
+        function toggleVault() { document.getElementById('apiVault').classList.toggle('active'); }
+        
+        function saveKeys() {
+            localStorage.setItem('cohi_epc_key', document.getElementById('keyEpc').value);
+            localStorage.setItem('cohi_os_key', document.getElementById('keyOs').value);
+        }
+
+        function loadKeys() {
+            const epc = localStorage.getItem('cohi_epc_key');
+            const os = localStorage.getItem('cohi_os_key');
+            if(epc) document.getElementById('keyEpc').value = epc;
+            // Only overwrite the OS key if there's an existing saved one, otherwise keep the pre-injected token
+            if(os) document.getElementById('keyOs').value = os; 
+            else saveKeys(); 
+        }
+        
+        // Initialize vault on load
+        loadKeys();
+
+        // --- MASTER SCRAPE ENGINE ---
+        async function runIntelScrape() {
+            const postcode = document.getElementById('postcode').value.trim();
+            const houseNum = document.getElementById('houseNum').value.trim();
+            
+            if (!postcode) return alert("Postcode is required to initiate spatial scrape.");
+
+            const loader = document.getElementById('loader');
+            const grid = document.getElementById('resultsGrid');
+            
+            grid.style.display = 'none';
+            loader.style.display = 'block';
+            loader.innerText = "Querying Postcodes.io for Geospatial Data...";
+
+            try {
+                // 1. FETCH GEOSPATIAL DATA
+                const cleanPC = postcode.replace(/\s+/g, '');
+                const pcRes = await fetch(`https://api.postcodes.io/postcodes/${cleanPC}`);
+                const pcData = await pcRes.json();
+
+                if (pcData.status !== 200) throw new Error("Invalid Postcode or Data Not Found.");
+
+                const lat = pcData.result.latitude;
+                const lng = pcData.result.longitude;
+
+                document.getElementById('val-council').innerText = pcData.result.admin_district;
+                document.getElementById('val-ward').innerText = pcData.result.admin_ward;
+                document.getElementById('val-region').innerText = pcData.result.region;
+                document.getElementById('val-coords').innerText = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+                // 2. FETCH TOPOGRAPHY & WEATHER
+                loader.innerText = "Querying Meteorological Servers...";
+                const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&elevation=true`);
+                const weatherData = await weatherRes.json();
+
+                const elevation = weatherData.elevation;
+                
+                document.getElementById('val-elevation').innerText = `${elevation}m`;
+                document.getElementById('val-wind').innerText = `${weatherData.current_weather.windspeed} km/h`;
+                
+                if (elevation > 150) document.getElementById('val-exposure').innerText = "High (Heavy Duty Ties)";
+                else if (elevation > 75) document.getElementById('val-exposure').innerText = "Moderate";
+                else document.getElementById('val-exposure').innerText = "Standard / Sheltered";
+
+                document.getElementById('val-snow').innerText = "0.6 kN/m² (UK Base Code)";
+
+                // 3. FETCH SOLAR EXPOSURE
+                loader.innerText = "Calculating Solar Trajectories...";
+                const sunRes = await fetch(`https://api.sunrise-sunset.org/json?lat=${lat}&lng=${lng}&formatted=0`);
+                const sunData = await sunRes.json();
+
+                if(sunData.status === "OK") {
+                    const dawn = new Date(sunData.results.civil_twilight_begin).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'});
+                    const sunset = new Date(sunData.results.sunset).toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'});
+                    const dayLengthSecs = sunData.results.day_length;
+
+                    document.getElementById('val-dawn').innerText = dawn;
+                    document.getElementById('val-sunset').innerText = sunset;
+                    document.getElementById('val-daylight').innerText = `${Math.floor(dayLengthSecs / 3600)}h ${Math.floor((dayLengthSecs % 3600) / 60)}m`;
+                }
+
+                // 4. THE HOLY GRAIL: UK GOV EPC DATA INJECTION
+                const epcKey = document.getElementById('keyEpc').value.trim();
+                const govCard = document.getElementById('govCard');
+                
+                if (epcKey && houseNum) {
+                    loader.innerText = "Unlocking Secure HMLR / EPC Database...";
+                    try {
+                        const epcUrl = `https://epc.opendatacommunities.org/api/v1/domestic/search?postcode=${cleanPC}`;
+                        const epcRes = await fetch(epcUrl, {
+                            headers: {
+                                'Authorization': `Basic ${epcKey}`,
+                                'Accept': 'application/json'
+                            }
+                        });
+                        
+                        if(epcRes.ok) {
+                            const epcData = await epcRes.json();
+                            
+                            if(epcData && epcData.rows && epcData.rows.length > 0) {
+                                // Find exact house match in the postcode array
+                                let match = epcData.rows.find(row => row.address.toLowerCase().startsWith(houseNum.toLowerCase()));
+                                if(!match) match = epcData.rows[0]; // Fallback to first house on street if exact match fails
+                                
+                                // Unlock the UI
+                                govCard.classList.add('unlocked');
+                                document.getElementById('epcBadge').innerText = "EPC API (Unlocked)";
+                                
+                                // Inject architectural intel
+                                const applyVal = (id, val) => {
+                                    const el = document.getElementById(id);
+                                    el.innerText = val ? val : "Unrecorded";
+                                    el.style.color = "#fff";
+                                };
+
+                                applyVal('val-epc-area', `${match['total-floor-area']} m²`);
+                                applyVal('val-epc-type', match['property-type'] + (match['built-form'] ? ` (${match['built-form']})` : ''));
+                                applyVal('val-epc-walls', match['walls-description']);
+                                applyVal('val-epc-roof', match['roof-description']);
+                            } else {
+                                throw new Error("No EPC filed for this property.");
+                            }
+                        } else {
+                            throw new Error("Invalid API Token.");
+                        }
+                    } catch (epcErr) {
+                        console.warn("EPC Fetch Failed:", epcErr.message);
+                        document.getElementById('val-epc-area').innerText = "Database Error / Not Found";
+                    }
+                } else if (!houseNum) {
+                    document.getElementById('val-epc-area').innerText = "House Number Required";
+                }
+
+                // 5. RENDER TOPOGRAPHICAL MAP
+                loader.innerText = "Rendering Topographical Maps...";
+                const bbox = `${lng-0.003},${lat-0.002},${lng+0.003},${lat+0.002}`;
+                
+                document.getElementById('mapContainer').innerHTML = `
+                    <div style="padding: 10px; background: #21262d; color: #fff; font-size: 12px; font-weight: bold; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between;">
+                        <span>Site Boundary Context</span>
+                        <span style="color: #8b949e; font-weight: normal;">OpenStreetMap Architecture Layer</span>
+                    </div>
+                    <iframe 
+                        src="https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}" 
+                        style="width: 100%; height: calc(100% - 35px); border: none;">
+                    </iframe>
+                `;
+
+                // REVEAL UI
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    grid.style.display = 'grid';
+                }, 500);
+
+            } catch (error) {
+                loader.style.display = 'none';
+                alert("Scraping Error: " + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
